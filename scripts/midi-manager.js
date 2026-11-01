@@ -25,8 +25,9 @@ class MidiManager {
         this.lastNoteOnTime = 0;
         this.lastMessageTime = 0;
         
-        // Initialisation
-        this.init();
+        // NE PAS initialiser automatiquement dans le constructeur
+        // L'initialisation sera faite par main.js dans le bon ordre
+        // this.init();
     }
     
     async init() {
@@ -47,7 +48,7 @@ class MidiManager {
             this.isConnected = true;
             
             console.log('MIDI initialisé avec succès');
-            showToast('MIDI prêt!', 'success');
+            // Ne pas afficher le toast ici - sera affiché une seule fois par main.js
             
         } catch (error) {
             console.error('Erreur lors de l\'initialisation MIDI:', error);
@@ -282,7 +283,8 @@ class MidiManager {
     
     handleDeviceConnected(device) {
         console.log('Appareil MIDI connecté:', device.name);
-        showToast(`MIDI: ${device.name} connecté!`, 'success');
+        // Ne pas afficher de toast pour chaque connexion/déconnexion
+        // showToast(`MIDI: ${device.name} connecté!`, 'success');
         
         this.connectedDevice = device;
         this.isConnected = true;
@@ -293,7 +295,8 @@ class MidiManager {
     
     handleDeviceDisconnected(device) {
         console.log('Appareil MIDI déconnecté:', device.name);
-        showToast(`MIDI: ${device.name} déconnecté!`, 'warning');
+        // Ne pas afficher de toast pour chaque connexion/déconnexion
+        // showToast(`MIDI: ${device.name} déconnecté!`, 'warning');
         
         if (this.connectedDevice && this.connectedDevice.id === device.id) {
             this.connectedDevice = null;
@@ -662,15 +665,15 @@ function getMidiManager() {
     return midiManagerInstance;
 }
 
-// Initialiser le gestionnaire MIDI au chargement
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        getMidiManager();
-    });
-} else {
-    getMidiManager();
-}
-
-// Exporter pour les autres modules
+// Exporter pour les autres modules - DOIT ÊTRE FAIT IMMÉDIATEMENT
 window.MidiManager = MidiManager;
 window.getMidiManager = getMidiManager;
+
+// NE PAS auto-initialiser ici - laisser main.js le faire dans le bon ordre
+// if (document.readyState === 'loading') {
+//     document.addEventListener('DOMContentLoaded', () => {
+//         getMidiManager();
+//     });
+// } else {
+//     getMidiManager();
+// }

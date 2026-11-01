@@ -87,6 +87,7 @@ async function initCoreComponents() {
     const midiManager = getMidiManager();
     if (isSupported('webMidi')) {
         await midiManager.init();
+        showToast('MIDI prêt!', 'success');
     }
     
     // Initialiser la timeline

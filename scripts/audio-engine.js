@@ -20,8 +20,9 @@ class AudioEngine {
         this.sampleRate = CONFIG.audio.sampleRate;
         this.latencyCompensation = CONFIG.audio.latencyCompensation;
         
-        // Initialisation
-        this.init();
+        // NE PAS initialiser automatiquement dans le constructeur
+        // L'initialisation sera faite par main.js dans le bon ordre
+        // this.init();
     }
     
     async init() {
@@ -504,15 +505,15 @@ function getAudioEngine() {
     return audioEngineInstance;
 }
 
-// Initialiser le moteur audio au chargement
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        getAudioEngine();
-    });
-} else {
-    getAudioEngine();
-}
-
-// Exporter pour les autres modules
+// Exporter pour les autres modules - DOIT ÊTRE FAIT IMMÉDIATEMENT
 window.AudioEngine = AudioEngine;
 window.getAudioEngine = getAudioEngine;
+
+// NE PAS auto-initialiser ici - laisser main.js le faire dans le bon ordre
+// if (document.readyState === 'loading') {
+//     document.addEventListener('DOMContentLoaded', () => {
+//         getAudioEngine();
+//     });
+// } else {
+//     getAudioEngine();
+// }

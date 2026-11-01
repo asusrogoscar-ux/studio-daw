@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Studio Musical - DAW Web</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Overlay de chargement -->
+    <div id="loading-overlay" class="overlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p>Initialisation du studio...</p>
+        </div>
+    </div>
+
+    <!-- Message de compatibilité -->
+    <div id="compatibility-warning" class="warning-banner hidden">
+        <span>⚠️ Votre navigateur ne supporte pas toutes les fonctionnalités. Utilisez Chrome, Firefox ou Edge pour une expérience optimale.</span>
+        <button onclick="document.getElementById('compatibility-warning').classList.add('hidden')">×</button>
+    </div>
+
+    <!-- Barre supérieure -->
+    <header class="top-bar">
+        <div class="logo-section">
+            <div class="logo">
+                <span class="logo-icon">🎵</span>
+                <span class="logo-text">Studio DAW</span>
+            </div>
+        </div>
+        
+        <div class="project-controls">
+            <button id="new-project-btn" class="btn btn-secondary" title="Nouveau projet">
+                <span class="icon">📁</span>
+            </button>
+            <button id="save-project-btn" class="btn btn-secondary" title="Sauvegarder">
+                <span class="icon">💾</span>
+            </button>
+            <button id="export-project-btn" class="btn btn-secondary" title="Exporter">
+                <span class="icon">📤</span>
+            </button>
+            <button id="load-project-btn" class="btn btn-secondary" title="Charger">
+                <span class="icon">📂</span>
+            </button>
+        </div>
+
+        <div class="transport-controls">
+            <button id="rewind-btn" class="btn btn-transport" title="Retour rapide">
+                <span class="icon">⏪</span>
+            </button>
+            <button id="stop-btn" class="btn btn-transport" title="Stop">
+                <span class="icon">⏹</span>
+            </button>
+            <button id="play-btn" class="btn btn-transport btn-primary" title="Lecture">
+                <span class="icon">▶</span>
+            </button>
+            <button id="record-btn" class="btn btn-transport btn-record" title="Enregistrement">
+                <span class="icon">⭕</span>
+            </button>
+        </div>
+
+        <div class="bpm-section">
+            <label for="bpm-input">BPM</label>
+            <input type="number" id="bpm-input" min="40" max="200" value="120">
+            <button id="tap-tempo-btn" class="btn btn-secondary">Tap</button>
+        </div>
+
+        <div class="midi-indicator" id="midi-indicator">
+            <span class="midi-status">MIDI: <span id="midi-status-text">Déconnecté</span></span>
+            <span class="midi-device" id="midi-device-text"></span>
+        </div>
+
+        <div class="settings-section">
+            <button id="settings-btn" class="btn btn-secondary" title="Paramètres">
+                <span class="icon">⚙️</span>
+            </button>
+            <button id="metronome-btn" class="btn btn-secondary" title="Métronome">
+                <span class="icon">🥁</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Conteneur principal -->
+    <main class="main-container">
+        <!-- Panneau de gauche - Bibliothèque -->
+        <aside class="left-panel">
+            <div class="panel-header">
+                <h2>Bibliothèque</h2>
+                <div class="panel-tabs">
+                    <button class="tab-btn active" data-tab="samples">Samples</button>
+                    <button class="tab-btn" data-tab="instruments">Instruments</button>
+                    <button class="tab-btn" data-tab="presets">Préglages</button>
+                </div>
+            </div>
+            
+            <div class="panel-content">
+                <div id="samples-tab" class="tab-content active">
+                    <div class="search-bar">
+                        <input type="text" placeholder="Rechercher des samples...">
+                        <span class="search-icon">🔍</span>
+                    </div>
+                    
+                    <div class="category-filters">
+                        <button class="filter-btn active" data-category="all">Tous</button>
+                        <button class="filter-btn" data-category="kick">Kicks</button>
+                        <button class="filter-btn" data-category="snare">Snares</button>
+                        <button class="filter-btn" data-category="hihat">Hi-Hats</button>
+                        <button class="filter-btn" data-category="bass">Basses</button>
+                        <button class="filter-btn" data-category="synth">Synthés</button>
+                        <button class="filter-btn" data-category="fx">Effets</button>
+                    </div>
+
+                    <div class="samples-grid" id="samples-grid">
+                        <!-- Les samples seront ajoutés dynamiquement -->
+                    </div>
+                </div>
+
+                <div id="instruments-tab" class="tab-content hidden">
+                    <div class="instruments-list" id="instruments-list">
+                        <!-- Les instruments seront ajoutés dynamiquement -->
+                    </div>
+                </div>
+
+                <div id="presets-tab" class="tab-content hidden">
+                    <div class="presets-list" id="presets-list">
+                        <!-- Les présélections seront ajoutées dynamiquement -->
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Section centrale - Timeline -->
+        <section class="center-section">
+            <!-- Barre de mesure -->
+            <div class="ruler-bar" id="ruler-bar">
+                <div class="ruler-scales" id="ruler-scales"></div>
+                <div class="ruler-markers" id="ruler-markers"></div>
+                <div class="playhead" id="playhead"></div>
+            </div>
+
+            <!-- Conteneur de la timeline -->
+            <div class="timeline-container" id="timeline-container">
+                <!-- En-têtes des pistes -->
+                <div class="tracks-header">
+                    <div class="track-header controls-header">
+                        <span>Contrôles</span>
+                    </div>
+                    <div class="track-header name-header">
+                        <span>Nom de la piste</span>
+                    </div>
+                    <div class="track-header timeline-header">
+                        <span>Timeline</span>
+                    </div>
+                </div>
+
+                <!-- Liste des pistes -->
+                <div class="tracks-list" id="tracks-list">
+                    <!-- Les pistes seront ajoutées dynamiquement -->
+                </div>
+            </div>
+
+            <!-- Barre de zoom -->
+            <div class="zoom-bar">
+                <button id="zoom-out-btn" class="btn btn-secondary">-</button>
+                <div class="zoom-slider-container">
+                    <input type="range" id="zoom-slider" min="1" max="100" value="50">
+                </div>
+                <button id="zoom-in-btn" class="btn btn-secondary">+</button>
+            </div>
+        </section>
+
+        <!-- Panneau de droite - Instruments et effets -->
+        <aside class="right-panel">
+            <div class="panel-tabs right-tabs">
+                <button class="tab-btn active" data-tab="drum-machine">Drum Machine</button>
+                <button class="tab-btn" data-tab="piano-roll">Piano Roll</button>
+                <button class="tab-btn" data-tab="virtual-keyboard">Clavier</button>
+                <button class="tab-btn" data-tab="mixer">Mixeur</button>
+            </div>
+
+            <div class="panel-content">
+                <!-- Drum Machine -->
+                <div id="drum-machine-tab" class="tab-content active">
+                    <div class="drum-machine" id="drum-machine">
+                        <div class="drum-pattern-controls">
+                            <div class="pattern-selector">
+                                <label>Pattern:</label>
+                                <select id="drum-pattern-select">
+                                    <option value="pattern-1">Pattern 1</option>
+                                    <option value="pattern-2">Pattern 2</option>
+                                    <option value="pattern-3">Pattern 3</option>
+                                    <option value="pattern-4">Pattern 4</option>
+                                </select>
+                            </div>
+                            <div class="pattern-length">
+                                <label>Longueur:</label>
+                                <select id="drum-pattern-length">
+                                    <option value="16">16</option>
+                                    <option value="32">32</option>
+                                    <option value="64">64</option>
+                                </select>
+                            </div>
+                            <button id="clear-drum-pattern" class="btn btn-secondary">Effacer</button>
+                        </div>
+
+                        <div class="drum-grid" id="drum-grid">
+                            <!-- La grille sera générée dynamiquement -->
+                        </div>
+
+                        <div class="drum-sounds">
+                            <div class="drum-sound" data-sound="kick">
+                                <button class="drum-pad" data-sound="kick">Kick</button>
+                            </div>
+                            <div class="drum-sound" data-sound="snare">
+                                <button class="drum-pad" data-sound="snare">Snare</button>
+                            </div>
+                            <div class="drum-sound" data-sound="hihat-closed">
+                                <button class="drum-pad" data-sound="hihat-closed">Hi-Hat</button>
+                            </div>
+                            <div class="drum-sound" data-sound="hihat-open">
+                                <button class="drum-pad" data-sound="hihat-open">Open Hat</button>
+                            </div>
+                            <div class="drum-sound" data-sound="clap">
+                                <button class="drum-pad" data-sound="clap">Clap</button>
+                            </div>
+                            <div class="drum-sound" data-sound="808">
+                                <button class="drum-pad" data-sound="808">808</button>
+                            </div>
+                            <div class="drum-sound" data-sound="cymbal">
+                                <button class="drum-pad" data-sound="cymbal">Cymbal</button>
+                            </div>
+                            <div class="drum-sound" data-sound="tom">
+                                <button class="drum-pad" data-sound="tom">Tom</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Piano Roll -->
+                <div id="piano-roll-tab" class="tab-content hidden">
+                    <div class="piano-roll-container" id="piano-roll-container">
+                        <div class="piano-roll-controls">
+                            <div class="piano-roll-settings">
+                                <label>Instrument:</label>
+                                <select id="piano-roll-instrument">
+                                    <option value="piano">Piano</option>
+                                    <option value="synth">Synthé</option>
+                                    <option value="bass">Basse</option>
+                                    <option value="strings">Cordes</option>
+                                </select>
+                            </div>
+                            <div class="piano-roll-settings">
+                                <label>Octave:</label>
+                                <select id="piano-roll-octave">
+                                    <option value="3">3</option>
+                                    <option value="4" selected>4</option>
+                                    <option value="5">5</option>
+                                </select>
+                            </div>
+                            <div class="piano-roll-settings">
+                                <label>Quantification:</label>
+                                <select id="piano-roll-quantize">
+                                    <option value="1/4">1/4</option>
+                                    <option value="1/8">1/8</option>
+                                    <option value="1/16" selected>1/16</option>
+                                    <option value="1/32">1/32</option>
+                                </select>
+                            </div>
+                            <button id="clear-piano-roll" class="btn btn-secondary">Effacer</button>
+                        </div>
+
+                        <div class="piano-roll" id="piano-roll">
+                            <!-- Le piano roll sera généré dynamiquement -->
+                        </div>
+
+                        <div class="piano-keyboard" id="piano-keyboard">
+                            <!-- Le clavier sera généré dynamiquement -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Clavier virtuel -->
+                <div id="virtual-keyboard-tab" class="tab-content hidden">
+                    <div class="virtual-keyboard-container" id="virtual-keyboard-container">
+                        <div class="keyboard-settings">
+                            <label>Instrument:</label>
+                            <select id="keyboard-instrument">
+                                <option value="piano">Piano</option>
+                                <option value="synth">Synthé</option>
+                                <option value="organ">Orgue</option>
+                                <option value="guitar">Guitare</option>
+                            </select>
+                            <button id="keyboard-record-btn" class="btn btn-secondary">Enregistrer</button>
+                        </div>
+
+                        <div class="virtual-keyboard" id="virtual-keyboard">
+                            <!-- Le clavier virtuel sera généré dynamiquement -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mixeur -->
+                <div id="mixer-tab" class="tab-content hidden">
+                    <div class="mixer-container" id="mixer-container">
+                        <div class="mixer-channels" id="mixer-channels">
+                            <!-- Les canaux du mixeur seront ajoutés dynamiquement -->
+                        </div>
+
+                        <div class="master-controls">
+                            <h3>Maître</h3>
+                            <div class="master-fader">
+                                <label>Volume</label>
+                                <input type="range" id="master-volume" min="0" max="100" value="80" orient="vertical">
+                                <span class="fader-value" id="master-volume-value">80%</span>
+                            </div>
+                            <div class="master-meters">
+                                <canvas id="master-meter-left" width="20" height="100"></canvas>
+                                <canvas id="master-meter-right" width="20" height="100"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <!-- Panneau de mixage étendu (en bas) -->
+    <div class="mixer-panel" id="mixer-panel">
+        <div class="mixer-header">
+            <h2>Table de Mixage</h2>
+            <button id="toggle-mixer-btn" class="btn btn-secondary">Masquer</button>
+        </div>
+        <div class="mixer-grid" id="mixer-grid">
+            <!-- Les contrôles du mixeur seront ajoutés dynamiquement -->
+        </div>
+    </div>
+
+    <!-- Modal de sauvegarde -->
+    <div id="save-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Sauvegarder le projet</h2>
+                <button class="close-modal" onclick="closeModal('save-modal')">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="project-name">Nom du projet:</label>
+                    <input type="text" id="project-name" placeholder="Mon projet">
+                </div>
+                <div class="form-group">
+                    <label for="project-description">Description:</label>
+                    <textarea id="project-description" placeholder="Description du projet..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('save-modal')">Annuler</button>
+                <button class="btn btn-primary" onclick="saveProject()">Sauvegarder</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de chargement -->
+    <div id="load-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Charger un projet</h2>
+                <button class="close-modal" onclick="closeModal('load-modal')">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="projects-list" id="projects-list">
+                    <!-- La liste des projets sera ajoutée dynamiquement -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('load-modal')">Annuler</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal d'export -->
+    <div id="export-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Exporter le projet</h2>
+                <button class="close-modal" onclick="closeModal('export-modal')">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="export-options">
+                    <div class="export-option">
+                        <label>
+                            <input type="radio" name="export-format" value="wav" checked>
+                            <span>Fichier WAV (non compressé)</span>
+                        </label>
+                    </div>
+                    <div class="export-option">
+                        <label>
+                            <input type="radio" name="export-format" value="mp3">
+                            <span>Fichier MP3 (compressé)</span>
+                        </label>
+                    </div>
+                    <div class="export-option">
+                        <label>
+                            <input type="radio" name="export-format" value="midi">
+                            <span>Fichier MIDI (notes uniquement)</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="export-quality">Qualité:</label>
+                    <select id="export-quality">
+                        <option value="high">Haute (320 kbps)</option>
+                        <option value="medium">Moyenne (192 kbps)</option>
+                        <option value="low">Basse (128 kbps)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('export-modal')">Annuler</button>
+                <button class="btn btn-primary" onclick="exportProject()">Exporter</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de confirmation -->
+    <div id="confirm-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="confirm-title">Confirmation</h2>
+                <button class="close-modal" onclick="closeModal('confirm-modal')">×</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirm-message">Êtes-vous sûr de vouloir effectuer cette action?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('confirm-modal')">Annuler</button>
+                <button class="btn btn-primary" id="confirm-action">Confirmer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Panneau de paramètres -->
+    <div id="settings-panel" class="settings-panel hidden">
+        <div class="settings-content">
+            <div class="settings-header">
+                <h2>Paramètres</h2>
+                <button class="close-settings" onclick="closeSettings()">×</button>
+            </div>
+            
+            <div class="settings-tabs">
+                <button class="settings-tab active" data-tab="audio">Audio</button>
+                <button class="settings-tab" data-tab="midi">MIDI</button>
+                <button class="settings-tab" data-tab="interface">Interface</button>
+                <button class="settings-tab" data-tab="shortcuts">Raccourcis</button>
+            </div>
+
+            <div class="settings-body">
+                <div id="audio-settings" class="settings-tab-content active">
+                    <div class="settings-group">
+                        <h3>Paramètres audio</h3>
+                        <div class="setting-item">
+                            <label for="audio-buffer-size">Taille du buffer:</label>
+                            <select id="audio-buffer-size">
+                                <option value="256">256</option>
+                                <option value="512" selected>512</option>
+                                <option value="1024">1024</option>
+                                <option value="2048">2048</option>
+                            </select>
+                        </div>
+                        <div class="setting-item">
+                            <label for="sample-rate">Fréquence d'échantillonnage:</label>
+                            <select id="sample-rate">
+                                <option value="44100" selected>44100 Hz</option>
+                                <option value="48000">48000 Hz</option>
+                                <option value="96000">96000 Hz</option>
+                            </select>
+                        </div>
+                        <div class="setting-item">
+                            <label for="latency-compensation">Compensation de latence:</label>
+                            <input type="range" id="latency-compensation" min="0" max="500" value="0">
+                            <span id="latency-value">0 ms</span>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3>Métronome</h3>
+                        <div class="setting-item">
+                            <label>
+                                <input type="checkbox" id="metronome-enabled">
+                                <span>Activer le métronome</span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <label for="metronome-volume">Volume:</label>
+                            <input type="range" id="metronome-volume" min="0" max="100" value="50">
+                            <span id="metronome-volume-value">50%</span>
+                        </div>
+                        <div class="setting-item">
+                            <label for="metronome-sound">Son:</label>
+                            <select id="metronome-sound">
+                                <option value="click">Click</option>
+                                <option value="beep">Beep</option>
+                                <option value="drum">Batterie</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="midi-settings" class="settings-tab-content hidden">
+                    <div class="settings-group">
+                        <h3>Paramètres MIDI</h3>
+                        <div class="setting-item">
+                            <label>
+                                <input type="checkbox" id="midi-thru">
+                                <span>MIDI Thru (transmission directe)</span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <label for="midi-channel">Canal MIDI:</label>
+                            <select id="midi-channel">
+                                <option value="all">Tous</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                                <option value="7">7</option>
+                                <option value="8">8</option>
+                                <option value="9">9</option>
+                                <option value="10">10</option>
+                                <option value="11">11</option>
+                                <option value="12">12</option>
+                                <option value="13">13</option>
+                                <option value="14">14</option>
+                                <option value="15">15</option>
+                                <option value="16">16</option>
+                            </select>
+                        </div>
+                        <div class="setting-item">
+                            <label for="velocity-curve">Courbe de vélocité:</label>
+                            <select id="velocity-curve">
+                                <option value="linear">Linéaire</option>
+                                <option value="logarithmic">Logarithmique</option>
+                                <option value="exponential">Exponentielle</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3>Appareils MIDI disponibles</h3>
+                        <div class="midi-devices-list" id="midi-devices-list">
+                            <p>Aucun appareil détecté</p>
+                        </div>
+                        <button id="refresh-midi-btn" class="btn btn-secondary">Rafraîchir</button>
+                    </div>
+                </div>
+
+                <div id="interface-settings" class="settings-tab-content hidden">
+                    <div class="settings-group">
+                        <h3>Apparence</h3>
+                        <div class="setting-item">
+                            <label>
+                                <input type="checkbox" id="dark-mode" checked>
+                                <span>Mode sombre</span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <label for="theme-color">Couleur du thème:</label>
+                            <input type="color" id="theme-color" value="#6366f1">
+                        </div>
+                        <div class="setting-item">
+                            <label for="ui-scale">Échelle de l'interface:</label>
+                            <select id="ui-scale">
+                                <option value="0.8">Petit</option>
+                                <option value="1.0" selected>Normal</option>
+                                <option value="1.2">Grand</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3>Langue</h3>
+                        <div class="setting-item">
+                            <label for="language">Langue:</label>
+                            <select id="language">
+                                <option value="fr" selected>Français</option>
+                                <option value="en">English</option>
+                                <option value="es">Español</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="shortcuts-settings" class="settings-tab-content hidden">
+                    <div class="settings-group">
+                        <h3>Raccourcis clavier</h3>
+                        <div class="shortcuts-grid">
+                            <div class="shortcut-item">
+                                <span class="shortcut-key">Espace</span>
+                                <span class="shortcut-desc">Lecture/Arrêt</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <span class="shortcut-key">R</span>
+                                <span class="shortcut-desc">Enregistrement</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <span class="shortcut-key">Suppr</span>
+                                <span class="shortcut-desc">Supprimer</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <span class="shortcut-key">Ctrl+C</span>
+                                <span class="shortcut-desc">Copier</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <span class="shortcut-key">Ctrl+V</span>
+                                <span class="shortcut-desc">Coller</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <span class="shortcut-key">Ctrl+Z</span>
+                                <span class="shortcut-desc">Annuler</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <span class="shortcut-key">Ctrl+Y</span>
+                                <span class="shortcut-desc">Rétablir</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <span class="shortcut-key">Ctrl+S</span>
+                                <span class="shortcut-desc">Sauvegarder</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-footer">
+                <button class="btn btn-secondary" onclick="closeSettings()">Fermer</button>
+                <button class="btn btn-primary" onclick="saveSettings()">Sauvegarder</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification toast -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="scripts/config.js"></script>
+    <script src="scripts/utils.js"></script>
+    <script src="scripts/audio-engine.js"></script>
+    <script src="scripts/midi-manager.js"></script>
+    <script src="scripts/track.js"></script>
+    <script src="scripts/timeline.js"></script>
+    <script src="scripts/recorder.js"></script>
+    <script src="scripts/drum-machine.js"></script>
+    <script src="scripts/piano-roll.js"></script>
+    <script src="scripts/virtual-keyboard.js"></script>
+    <script src="scripts/mixer.js"></script>
+    <script src="scripts/effects.js"></script>
+    <script src="scripts/samples-library.js"></script>
+    <script src="scripts/instruments.js"></script>
+    <script src="scripts/storage.js"></script>
+    <script src="scripts/ui.js"></script>
+    <script src="scripts/keyboard-shortcuts.js"></script>
+    <script src="scripts/main.js"></script>
+</body>
+</html>

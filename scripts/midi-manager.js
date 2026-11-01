@@ -7,7 +7,7 @@ class MidiManager {
         this.midiOutputs = [];
         this.connectedDevice = null;
         this.isConnected = false;
-        this.isSupported = isSupported('webMidi');
+        this.isSupported = window.isSupported ? window.isSupported('webMidi') : false;
         this.listeners = new Map();
         this.noteOnListeners = new Map();
         this.noteOffListeners = new Map();
@@ -16,9 +16,9 @@ class MidiManager {
         this.pitchBendListeners = new Map();
         
         // Paramètres
-        this.channel = CONFIG.midi.channel;
-        this.thruEnabled = CONFIG.midi.thruEnabled;
-        this.velocityCurve = CONFIG.midi.velocityCurve;
+        this.channel = (typeof CONFIG !== 'undefined' && CONFIG.midi) ? CONFIG.midi.channel : 'all';
+        this.thruEnabled = (typeof CONFIG !== 'undefined' && CONFIG.midi) ? CONFIG.midi.thruEnabled : true;
+        this.velocityCurve = (typeof CONFIG !== 'undefined' && CONFIG.midi) ? CONFIG.midi.velocityCurve : 'linear';
         
         // État
         this.activeNotes = new Map();
@@ -26,14 +26,15 @@ class MidiManager {
         this.lastMessageTime = 0;
         
         // NE PAS initialiser automatiquement dans le constructeur
-        // L'initialisation sera faite par main.js dans le bon ordre
-        // this.init();
+        // L'initialisation sera faite par core.js dans le bon ordre
     }
     
     async init() {
         if (!this.isSupported) {
             console.warn('Web MIDI API non supportée');
-            showWarning('Votre navigateur ne supporte pas la Web MIDI API. Utilisez Chrome, Firefox ou Edge pour la prise en charge MIDI.');
+            if (typeof window.showWarning === 'function') {
+                window.showWarning('Votre navigateur ne supporte pas la Web MIDI API. Utilisez Chrome, Firefox ou Edge pour la prise en charge MIDI.');
+            }
             return;
         }
         
@@ -48,11 +49,12 @@ class MidiManager {
             this.isConnected = true;
             
             console.log('MIDI initialisé avec succès');
-            // Ne pas afficher le toast ici - sera affiché une seule fois par main.js
             
         } catch (error) {
             console.error('Erreur lors de l\'initialisation MIDI:', error);
-            showError(ERROR_MESSAGES.midi.permissionDenied);
+            if (typeof window.showError === 'function') {
+                window.showError(window.ERROR_MESSAGES ? window.ERROR_MESSAGES.midi.permissionDenied : 'Accès MIDI refusé');
+            }
         }
     }
     
@@ -78,214 +80,111 @@ class MidiManager {
         this.midiInputs = [];
         this.midiOutputs = [];
         
-        const inputs = this.midiAccess.inputs.values();
-        const outputs = this.midiAccess.outputs.values();
-        
-        for (const input of inputs) {
-            this.midiInputs.push({
-                id: input.id,
-                name: input.name,
-                manufacturer: input.manufacturer,
-                type: input.type,
-                state: input.state,
-                port: input
-            });
-            
-            // Configurer le gestionnaire de messages pour chaque entrée
-            this.setupInputHandler(input);
+        for (const input of this.midiAccess.inputs.values()) {
+            this.midiInputs.push(input);
+            this.setupInputListeners(input);
         }
         
-        for (const output of outputs) {
-            this.midiOutputs.push({
-                id: output.id,
-                name: output.name,
-                manufacturer: output.manufacturer,
-                type: output.type,
-                state: output.state,
-                port: output
-            });
+        for (const output of this.midiAccess.outputs.values()) {
+            this.midiOutputs.push(output);
         }
         
-        // Mettre à jour l'interface
-        this.updateDeviceList();
-        
-        return {
-            inputs: this.midiInputs,
-            outputs: this.midiOutputs
-        };
+        return this.midiInputs;
     }
     
-    setupInputHandler(input) {
-        if (!input || input.onmidimessage) return;
+    setupInputListeners(input) {
+        if (!input) return;
         
+        const self = this;
         input.onmidimessage = (message) => {
-            this.handleMidiMessage(message, input);
+            const [status, data1, data2] = message.data;
+            const timestamp = message.timeStamp;
+            
+            const command = status & 0xF0;
+            const channel = status & 0x0F;
+            
+            // Filtrer par canal si nécessaire
+            if (self.channel !== 'all' && channel !== parseInt(self.channel) - 1) {
+                return;
+            }
+            
+            switch (command) {
+                case 0x90: // Note On
+                    if (data2 > 0) {
+                        self.handleNoteOn(data1, data2, timestamp);
+                    } else {
+                        self.handleNoteOff(data1, timestamp);
+                    }
+                    break;
+                case 0x80: // Note Off
+                    self.handleNoteOff(data1, timestamp);
+                    break;
+                case 0xB0: // Control Change
+                    self.handleControlChange(data1, data2, channel, timestamp);
+                    break;
+                case 0xC0: // Program Change
+                    self.handleProgramChange(data1, channel, timestamp);
+                    break;
+                case 0xD0: // Channel Pressure
+                    self.handleChannelPressure(data1, data2, channel, timestamp);
+                    break;
+                case 0xE0: // Pitch Bend
+                    self.handlePitchBend(data1, data2, channel, timestamp);
+                    break;
+            }
         };
     }
     
-    handleMidiMessage(message, input) {
-        const [status, data1, data2] = message.data;
-        const channel = status & 0x0F;
-        const command = status >> 4;
-        const timestamp = message.timeStamp;
+    handleNoteOn(note, velocity, timestamp) {
+        this.activeNotes.set(note, { velocity, timestamp });
+        this.notifyNoteOnListeners(note, velocity, timestamp);
         
-        // Filtrer par canal si nécessaire
-        if (this.channel !== 'all' && channel !== parseInt(this.channel)) {
-            return;
+        // Jouer la note sur l'instrument sélectionné
+        const audioEngine = typeof getAudioEngine === 'function' ? getAudioEngine() : null;
+        if (audioEngine && audioEngine.synths && audioEngine.synths.piano) {
+            const frequency = window.midiToFrequency ? window.midiToFrequency(note) : 440;
+            audioEngine.synths.piano.play(frequency, velocity);
         }
         
-        // Stocker le dernier temps de message
-        this.lastMessageTime = timestamp;
-        
-        // Traiter les différents types de messages
-        switch (command) {
-            case 0x08: // Note Off
-                this.handleNoteOff(data1, data2, channel, input);
-                break;
-            case 0x09: // Note On
-                if (data2 === 0) {
-                    // Note On avec vélocité 0 = Note Off
-                    this.handleNoteOff(data1, 0, channel, input);
-                } else {
-                    this.handleNoteOn(data1, data2, channel, input);
-                }
-                break;
-            case 0x0A: // Aftertouch polyphonique
-                this.handlePolyphonicAftertouch(data1, data2, channel, input);
-                break;
-            case 0x0B: // Control Change
-                this.handleControlChange(data1, data2, channel, input);
-                break;
-            case 0x0C: // Program Change
-                this.handleProgramChange(data1, channel, input);
-                break;
-            case 0x0D: // Channel Pressure (Aftertouch)
-                this.handleChannelPressure(data1, channel, input);
-                break;
-            case 0x0E: // Pitch Bend
-                this.handlePitchBend(data1, data2, channel, input);
-                break;
-        }
-        
-        // MIDI Thru
-        if (this.thruEnabled) {
-            this.sendMidiMessage(message.data);
-        }
-        
-        // Notifier les écouteurs généraux
-        this.notifyListeners('message', {
-            type: command,
-            data1,
-            data2,
-            channel,
-            input,
-            timestamp
-        });
+        // Notifier les écouteurs
+        this.notifyListeners('noteOn', { note, velocity, timestamp });
     }
     
-    handleNoteOn(note, velocity, channel, input) {
-        // Appliquer la courbe de vélocité
-        const processedVelocity = applyVelocityCurve(velocity, this.velocityCurve);
-        
-        // Stocker la note active
-        this.activeNotes.set(note, {
-            velocity: processedVelocity,
-            channel,
-            input,
-            time: Date.now()
-        });
-        
-        // Notifier les écouteurs de note on
-        this.notifyNoteOnListeners(note, processedVelocity, channel, input);
-        
-        // Notifier les écouteurs généraux
-        this.notifyListeners('noteOn', {
-            note,
-            velocity: processedVelocity,
-            channel,
-            input
-        });
-        
-        // Jouer la note sur le synthé par défaut
-        this.playNote(note, processedVelocity);
-    }
-    
-    handleNoteOff(note, velocity, channel, input) {
-        // Supprimer la note active
+    handleNoteOff(note, timestamp) {
         this.activeNotes.delete(note);
+        this.notifyNoteOffListeners(note, timestamp);
         
-        // Notifier les écouteurs de note off
-        this.notifyNoteOffListeners(note, velocity, channel, input);
+        // Arrêter la note
+        const audioEngine = typeof getAudioEngine === 'function' ? getAudioEngine() : null;
+        if (audioEngine && audioEngine.synths && audioEngine.synths.piano) {
+            audioEngine.synths.piano.stopAll();
+        }
         
-        // Notifier les écouteurs généraux
-        this.notifyListeners('noteOff', {
-            note,
-            velocity,
-            channel,
-            input
-        });
-        
-        // Arrêter la note sur le synthé
-        this.stopNote(note);
+        // Notifier les écouteurs
+        this.notifyListeners('noteOff', { note, timestamp });
     }
     
-    handlePolyphonicAftertouch(note, pressure, channel, input) {
-        this.notifyListeners('polyphonicAftertouch', {
-            note,
-            pressure,
-            channel,
-            input
-        });
+    handleControlChange(controller, value, channel, timestamp) {
+        this.notifyControlChangeListeners(controller, value, channel, timestamp);
+        this.notifyListeners('controlChange', { controller, value, channel, timestamp });
     }
     
-    handleControlChange(controller, value, channel, input) {
-        this.notifyControlChangeListeners(controller, value, channel, input);
-        
-        this.notifyListeners('controlChange', {
-            controller,
-            value,
-            channel,
-            input
-        });
+    handleProgramChange(program, channel, timestamp) {
+        this.notifyListeners('programChange', { program, channel, timestamp });
     }
     
-    handleProgramChange(program, channel, input) {
-        this.notifyListeners('programChange', {
-            program,
-            channel,
-            input
-        });
+    handleChannelPressure(pressure, channel, timestamp) {
+        this.notifyListeners('channelPressure', { pressure, channel, timestamp });
     }
     
-    handleChannelPressure(pressure, channel, input) {
-        this.notifyChannelPressureListeners(pressure, channel, input);
-        
-        this.notifyListeners('channelPressure', {
-            pressure,
-            channel,
-            input
-        });
-    }
-    
-    handlePitchBend(data1, data2, channel, input) {
-        const pitchBend = (data2 << 7) | data1;
-        const normalized = (pitchBend - 8192) / 8192; // -1 à 1
-        
-        this.notifyPitchBendListeners(normalized, channel, input);
-        
-        this.notifyListeners('pitchBend', {
-            value: normalized,
-            raw: pitchBend,
-            channel,
-            input
-        });
+    handlePitchBend(value, channel, timestamp) {
+        const bend = ((value & 0x7F) << 7) | (value & 0x7F);
+        const normalized = (bend - 8192) / 8192.0;
+        this.notifyListeners('pitchBend', { value: normalized, channel, timestamp });
     }
     
     handleDeviceConnected(device) {
         console.log('Appareil MIDI connecté:', device.name);
-        // Ne pas afficher de toast pour chaque connexion/déconnexion
-        // showToast(`MIDI: ${device.name} connecté!`, 'success');
-        
         this.connectedDevice = device;
         this.isConnected = true;
         this.listDevices();
@@ -295,8 +194,6 @@ class MidiManager {
     
     handleDeviceDisconnected(device) {
         console.log('Appareil MIDI déconnecté:', device.name);
-        // Ne pas afficher de toast pour chaque connexion/déconnexion
-        // showToast(`MIDI: ${device.name} déconnecté!`, 'warning');
         
         if (this.connectedDevice && this.connectedDevice.id === device.id) {
             this.connectedDevice = null;
@@ -310,276 +207,145 @@ class MidiManager {
     }
     
     playNote(note, velocity = 127) {
-        const audioEngine = getAudioEngine();
-        if (!audioEngine || !audioEngine.synths.piano) return;
+        const audioEngine = typeof getAudioEngine === 'function' ? getAudioEngine() : null;
+        if (!audioEngine || !audioEngine.synths || !audioEngine.synths.piano) return;
         
-        const frequency = midiToFrequency(note);
+        const frequency = window.midiToFrequency ? window.midiToFrequency(note) : 440;
         audioEngine.synths.piano.play(frequency, velocity);
     }
     
     stopNote(note) {
-        const audioEngine = getAudioEngine();
-        if (!audioEngine || !audioEngine.synths.piano) return;
+        const audioEngine = typeof getAudioEngine === 'function' ? getAudioEngine() : null;
+        if (!audioEngine || !audioEngine.synths || !audioEngine.synths.piano) return;
         
-        const frequency = midiToFrequency(note);
         audioEngine.synths.piano.stopAll();
     }
     
     sendMidiMessage(message) {
-        if (!this.midiAccess || !this.midiOutputs.length) return;
+        if (!this.midiAccess || !this.connectedDevice) return;
         
-        // Envoyer à toutes les sorties
-        this.midiOutputs.forEach(output => {
-            if (output.port && output.port.send) {
-                output.port.send(message);
-            }
-        });
-    }
-    
-    sendNoteOn(note, velocity = 127, channel = 0) {
-        const status = 0x90 | (channel & 0x0F);
-        this.sendMidiMessage([status, note & 0x7F, velocity & 0x7F]);
-    }
-    
-    sendNoteOff(note, velocity = 0, channel = 0) {
-        const status = 0x80 | (channel & 0x0F);
-        this.sendMidiMessage([status, note & 0x7F, velocity & 0x7F]);
-    }
-    
-    sendControlChange(controller, value, channel = 0) {
-        const status = 0xB0 | (channel & 0x0F);
-        this.sendMidiMessage([status, controller & 0x7F, value & 0x7F]);
-    }
-    
-    sendProgramChange(program, channel = 0) {
-        const status = 0xC0 | (channel & 0x0F);
-        this.sendMidiMessage([status, program & 0x7F]);
-    }
-    
-    sendPitchBend(value, channel = 0) {
-        // value: -1 à 1
-        const bendValue = Math.floor((value + 1) * 8192);
-        const lsb = bendValue & 0x7F;
-        const msb = (bendValue >> 7) & 0x7F;
-        const status = 0xE0 | (channel & 0x0F);
-        this.sendMidiMessage([status, lsb, msb]);
-    }
-    
-    sendChannelPressure(pressure, channel = 0) {
-        const status = 0xD0 | (channel & 0x0F);
-        this.sendMidiMessage([status, pressure & 0x7F]);
-    }
-    
-    // Gestion des écouteurs
-    addListener(event, callback) {
-        if (!this.listeners.has(event)) {
-            this.listeners.set(event, new Set());
+        for (const output of this.midiAccess.outputs.values()) {
+            output.send(message);
         }
-        this.listeners.get(event).add(callback);
-        
-        return () => {
-            this.listeners.get(event).delete(callback);
-        };
     }
     
-    addNoteOnListener(callback) {
-        this.noteOnListeners.set(callback, callback);
-        return () => {
-            this.noteOnListeners.delete(callback);
-        };
+    getConnectedDevice() {
+        return this.connectedDevice;
     }
     
-    addNoteOffListener(callback) {
-        this.noteOffListeners.set(callback, callback);
-        return () => {
-            this.noteOffListeners.delete(callback);
-        };
+    getInputs() {
+        return this.midiInputs;
     }
     
-    addControlChangeListener(callback) {
-        this.controlChangeListeners.set(callback, callback);
-        return () => {
-            this.controlChangeListeners.delete(callback);
-        };
+    getOutputs() {
+        return this.midiOutputs;
     }
     
-    addChannelPressureListener(callback) {
-        this.channelPressureListeners.set(callback, callback);
-        return () => {
-            this.channelPressureListeners.delete(callback);
-        };
+    isMidiSupported() {
+        return this.isSupported;
     }
     
-    addPitchBendListener(callback) {
-        this.pitchBendListeners.set(callback, callback);
-        return () => {
-            this.pitchBendListeners.delete(callback);
-        };
+    isConnectedToDevice() {
+        return this.isConnected;
+    }
+    
+    // Gestion des listeners
+    on(event, callback) {
+        if (!this.listeners.has(event)) {
+            this.listeners.set(event, []);
+        }
+        this.listeners.get(event).push(callback);
+    }
+    
+    off(event, callback) {
+        if (this.listeners.has(event)) {
+            const callbacks = this.listeners.get(event);
+            const index = callbacks.indexOf(callback);
+            if (index > -1) {
+                callbacks.splice(index, 1);
+            }
+        }
     }
     
     notifyListeners(event, data) {
-        const listeners = this.listeners.get(event);
-        if (listeners) {
-            listeners.forEach(callback => {
+        if (this.listeners.has(event)) {
+            this.listeners.get(event).forEach(callback => {
                 try {
                     callback(data);
                 } catch (error) {
-                    console.error('Erreur dans le callback MIDI:', error);
+                    console.error(`Erreur dans le callback pour ${event}:`, error);
                 }
             });
         }
     }
     
-    notifyNoteOnListeners(note, velocity, channel, input) {
+    // Listeners spécifiques pour les notes
+    onNoteOn(callback) {
+        const id = Date.now().toString();
+        this.noteOnListeners.set(id, callback);
+        return id;
+    }
+    
+    onNoteOff(callback) {
+        const id = Date.now().toString();
+        this.noteOffListeners.set(id, callback);
+        return id;
+    }
+    
+    offNoteOn(id) {
+        this.noteOnListeners.delete(id);
+    }
+    
+    offNoteOff(id) {
+        this.noteOffListeners.delete(id);
+    }
+    
+    notifyNoteOnListeners(note, velocity, timestamp) {
         this.noteOnListeners.forEach(callback => {
             try {
-                callback({ note, velocity, channel, input });
+                callback({ note, velocity, timestamp });
             } catch (error) {
-                console.error('Erreur dans le callback Note On:', error);
+                console.error('Erreur dans le callback noteOn:', error);
             }
         });
     }
     
-    notifyNoteOffListeners(note, velocity, channel, input) {
+    notifyNoteOffListeners(note, timestamp) {
         this.noteOffListeners.forEach(callback => {
             try {
-                callback({ note, velocity, channel, input });
+                callback({ note, timestamp });
             } catch (error) {
-                console.error('Erreur dans le callback Note Off:', error);
+                console.error('Erreur dans le callback noteOff:', error);
             }
         });
     }
     
-    notifyControlChangeListeners(controller, value, channel, input) {
-        this.controlChangeListeners.forEach(callback => {
-            try {
-                callback({ controller, value, channel, input });
-            } catch (error) {
-                console.error('Erreur dans le callback Control Change:', error);
-            }
-        });
+    setChannel(channel) {
+        this.channel = channel;
+        if (typeof CONFIG !== 'undefined' && CONFIG.midi) {
+            CONFIG.midi.channel = channel;
+        }
     }
     
-    notifyChannelPressureListeners(pressure, channel, input) {
-        this.channelPressureListeners.forEach(callback => {
-            try {
-                callback({ pressure, channel, input });
-            } catch (error) {
-                console.error('Erreur dans le callback Channel Pressure:', error);
-            }
-        });
+    setThruEnabled(enabled) {
+        this.thruEnabled = enabled;
+        if (typeof CONFIG !== 'undefined' && CONFIG.midi) {
+            CONFIG.midi.thruEnabled = enabled;
+        }
     }
     
-    notifyPitchBendListeners(value, channel, input) {
-        this.pitchBendListeners.forEach(callback => {
-            try {
-                callback({ value, channel, input });
-            } catch (error) {
-                console.error('Erreur dans le callback Pitch Bend:', error);
-            }
-        });
-    }
-    
-    updateDeviceList() {
-        const deviceList = document.getElementById('midi-devices-list');
-        if (!deviceList) return;
-        
-        // Effacer la liste actuelle
-        deviceList.innerHTML = '';
-        
-        if (this.midiInputs.length === 0) {
-            deviceList.innerHTML = '<p>Aucun appareil MIDI détecté</p>';
-            return;
+    setVelocityCurve(curve) {
+        this.velocityCurve = curve;
+        if (typeof CONFIG !== 'undefined' && CONFIG.midi) {
+            CONFIG.midi.velocityCurve = curve;
         }
-        
-        // Créer la liste des appareils
-        const list = document.createElement('ul');
-        list.className = 'device-list';
-        
-        this.midiInputs.forEach(device => {
-            const item = document.createElement('li');
-            item.className = 'device-item';
-            
-            const name = document.createElement('span');
-            name.className = 'device-name';
-            name.textContent = `${device.name} (${device.manufacturer || 'Inconnu'})`;
-            
-            const status = document.createElement('span');
-            status.className = `device-status ${device.state}`;
-            status.textContent = device.state;
-            
-            const connectBtn = document.createElement('button');
-            connectBtn.className = 'btn btn-secondary';
-            connectBtn.textContent = 'Connecter';
-            connectBtn.onclick = () => this.connectDevice(device.id);
-            
-            item.appendChild(name);
-            item.appendChild(status);
-            item.appendChild(connectBtn);
-            list.appendChild(item);
-        });
-        
-        deviceList.appendChild(list);
-    }
-    
-    connectDevice(deviceId) {
-        const device = this.midiInputs.find(d => d.id === deviceId);
-        if (!device) {
-            showError('Appareil introuvable');
-            return;
-        }
-        
-        this.connectedDevice = device;
-        this.isConnected = true;
-        
-        // Mettre à jour l'interface
-        const indicator = document.getElementById('midi-indicator');
-        const statusText = document.getElementById('midi-status-text');
-        const deviceText = document.getElementById('midi-device-text');
-        
-        if (indicator) {
-            indicator.classList.add('connected');
-        }
-        if (statusText) {
-            statusText.textContent = 'Connecté';
-        }
-        if (deviceText) {
-            deviceText.textContent = device.name;
-        }
-        
-        showToast(`Connecté à ${device.name}`, 'success');
-        this.notifyListeners('deviceConnected', { device });
-    }
-    
-    disconnectDevice() {
-        if (!this.connectedDevice) return;
-        
-        const device = this.connectedDevice;
-        this.connectedDevice = null;
-        this.isConnected = this.midiInputs.length > 0;
-        
-        // Mettre à jour l'interface
-        const indicator = document.getElementById('midi-indicator');
-        const statusText = document.getElementById('midi-status-text');
-        const deviceText = document.getElementById('midi-device-text');
-        
-        if (indicator) {
-            indicator.classList.remove('connected');
-        }
-        if (statusText) {
-            statusText.textContent = this.isConnected ? 'Déconnecté' : 'Non disponible';
-        }
-        if (deviceText) {
-            deviceText.textContent = '';
-        }
-        
-        showToast(`Déconnecté de ${device.name}`, 'warning');
-        this.notifyListeners('deviceDisconnected', { device });
     }
     
     refreshDevices() {
         if (!this.isSupported) {
-            showError('Web MIDI API non supportée');
+            if (typeof window.showError === 'function') {
+                window.showError('Web MIDI API non supportée');
+            }
             return;
         }
         
@@ -590,61 +356,11 @@ class MidiManager {
         }
     }
     
-    setChannel(channel) {
-        this.channel = channel;
-        CONFIG.midi.channel = channel;
-    }
-    
-    setThruEnabled(enabled) {
-        this.thruEnabled = enabled;
-        CONFIG.midi.thruEnabled = enabled;
-    }
-    
-    setVelocityCurve(curve) {
-        this.velocityCurve = curve;
-        CONFIG.midi.velocityCurve = curve;
-    }
-    
-    getConnectedDevice() {
-        return this.connectedDevice;
-    }
-    
-    getDevices() {
-        return {
-            inputs: this.midiInputs,
-            outputs: this.midiOutputs
-        };
-    }
-    
-    getActiveNotes() {
-        return Array.from(this.activeNotes.values());
-    }
-    
-    isNoteActive(note) {
-        return this.activeNotes.has(note);
-    }
-    
     cleanup() {
-        // Supprimer tous les écouteurs
-        this.listeners.clear();
-        this.noteOnListeners.clear();
-        this.noteOffListeners.clear();
-        this.controlChangeListeners.clear();
-        this.channelPressureListeners.clear();
-        this.pitchBendListeners.clear();
-        
-        // Déconnecter les appareils
         if (this.midiAccess) {
             this.midiAccess.onstatechange = null;
-            
-            this.midiInputs.forEach(input => {
-                if (input.port) {
-                    input.port.onmidimessage = null;
-                }
-            });
         }
         
-        this.midiAccess = null;
         this.midiInputs = [];
         this.midiOutputs = [];
         this.connectedDevice = null;
@@ -665,7 +381,11 @@ function getMidiManager() {
     return midiManagerInstance;
 }
 
-// Exporter pour les autres modules - DOIT ÊTRE FAIT IMMÉDIATEMENT
+// Exporter pour les autres modules
 window.MidiManager = MidiManager;
 window.getMidiManager = getMidiManager;
-window._midiManagerInstance = midiManagerInstance;
+
+// Enregistrer dans le registry CORE
+if (typeof window.CORE !== 'undefined' && typeof window.CORE.registerModule === 'function') {
+    window.CORE.registerModule('midi-manager', MidiManager, getMidiManager);
+}

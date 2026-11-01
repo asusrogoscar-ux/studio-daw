@@ -16,20 +16,19 @@ class AudioEngine {
         this.resumePromise = null;
         
         // Paramètres
-        this.bufferSize = CONFIG.audio.bufferSize;
-        this.sampleRate = CONFIG.audio.sampleRate;
-        this.latencyCompensation = CONFIG.audio.latencyCompensation;
+        this.bufferSize = (typeof CONFIG !== 'undefined' && CONFIG.audio) ? CONFIG.audio.bufferSize : 512;
+        this.sampleRate = (typeof CONFIG !== 'undefined' && CONFIG.audio) ? CONFIG.audio.sampleRate : 44100;
+        this.latencyCompensation = (typeof CONFIG !== 'undefined' && CONFIG.audio) ? CONFIG.audio.latencyCompensation : 0;
         
         // NE PAS initialiser automatiquement dans le constructeur
-        // L'initialisation sera faite par main.js dans le bon ordre
-        // this.init();
+        // L'initialisation sera faite par core.js dans le bon ordre
     }
     
     async init() {
         try {
             // Vérifier la prise en charge
-            if (!isSupported('webAudio')) {
-                throw new Error(ERROR_MESSAGES.audioContext.create);
+            if (!window.isSupported('webAudio')) {
+                throw new Error(window.ERROR_MESSAGES.audioContext.create);
             }
             
             // Créer le contexte audio
@@ -39,7 +38,7 @@ class AudioEngine {
                 latencyHint: this.bufferSize / this.sampleRate
             });
             
-            APP_STATE.audioContext = this.audioContext;
+            window.APP_STATE.audioContext = this.audioContext;
             
             // Créer les nœuds principaux
             this.createMasterChain();
@@ -54,11 +53,11 @@ class AudioEngine {
             this.isRunning = true;
             
             console.log('Moteur audio initialisé avec succès');
-            showToast('Moteur audio prêt!', 'success');
+            window.showToast('Moteur audio prêt!', 'success');
             
         } catch (error) {
             console.error('Erreur lors de l\'initialisation du moteur audio:', error);
-            showError('Erreur audio: ' + error.message);
+            window.showError('Erreur audio: ' + error.message);
             throw error;
         }
     }
@@ -68,10 +67,10 @@ class AudioEngine {
         
         // Créer le nœud de gain maître
         this.masterGain = this.audioContext.createGain();
-        this.masterGain.gain.value = CONFIG.audio.masterVolume;
+        this.masterGain.gain.value = (typeof CONFIG !== 'undefined' && CONFIG.audio) ? CONFIG.audio.masterVolume : 0.8;
         
         // Créer le compresseur maître
-        this.masterCompressor = createCompressor(
+        this.masterCompressor = this.createCompressor(
             this.audioContext,
             -1,  // threshold
             1,   // knee
@@ -94,6 +93,16 @@ class AudioEngine {
         this.masterMeter.connect(this.destination);
     }
     
+    createCompressor(context, threshold, knee, ratio, attack, release) {
+        const compressor = context.createDynamicsCompressor();
+        compressor.threshold.value = threshold;
+        compressor.knee.value = knee;
+        compressor.ratio.value = ratio;
+        compressor.attack.value = attack;
+        compressor.release.value = release;
+        return compressor;
+    }
+    
     createMetronome() {
         if (!this.audioContext) return;
         
@@ -108,189 +117,223 @@ class AudioEngine {
         gainNode.connect(this.masterGain);
         
         this.metronome = {
-            oscillator,
-            gainNode,
+            oscillator: oscillator,
+            gainNode: gainNode,
             isPlaying: false,
-            bpm: CONFIG.project.bpm,
-            beatCount: 0,
-            
-            start: () => {
-                if (this.metronome.isPlaying) return;
+            bpm: 120,
+            beatCount: 0
+        };
+        
+        oscillator.start();
+    }
+    
+    initInstruments() {
+        if (!this.audioContext) return;
+        
+        // Initialiser les synthés
+        this.initSynths();
+        
+        // Initialiser les samplers
+        this.initSamplers();
+    }
+    
+    initSynths() {
+        // Synthé piano
+        this.synths.piano = this.createPolyphonicSynth('piano');
+        
+        // Synthé synth
+        this.synths.synth = this.createPolyphonicSynth('synth');
+        
+        // Synthé basse
+        this.synths.bass = this.createPolyphonicSynth('bass');
+        
+        // Synthé cordes
+        this.synths.strings = this.createPolyphonicSynth('strings');
+        
+        // Synthé cuivre
+        this.synths.brass = this.createPolyphonicSynth('brass');
+    }
+    
+    createPolyphonicSynth(type) {
+        const voices = new Map();
+        const maxVoices = 16;
+        const self = this;
+        
+        return {
+            type: type,
+            play: function(frequency, velocity) {
+                if (!self.audioContext) return;
                 
-                this.metronome.isPlaying = true;
-                this.metronome.beatCount = 0;
-                
-                const interval = 60000 / this.metronome.bpm;
-                
-                const playBeat = () => {
-                    if (!this.metronome.isPlaying) return;
-                    
-                    const now = this.audioContext.currentTime;
-                    
-                    // Jouer le son du métronome
-                    gainNode.gain.cancelScheduledValues(now);
-                    gainNode.gain.setValueAtTime(0.5 * CONFIG.project.metronomeVolume, now);
-                    gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-                    
-                    // Accentuer le premier beat
-                    if (this.metronome.beatCount % 4 === 0) {
-                        gainNode.gain.setValueAtTime(0.8 * CONFIG.project.metronomeVolume, now);
+                // Trouver une voix libre
+                for (let i = 0; i < maxVoices; i++) {
+                    const voiceId = `${type}-${i}`;
+                    if (!voices.has(voiceId)) {
+                        self.createSynthVoice(voiceId, type, frequency, velocity, voices);
+                        return;
                     }
-                    
-                    this.metronome.beatCount++;
-                    
-                    // Planifier le prochain beat
-                    setTimeout(playBeat, interval);
-                };
+                }
                 
-                // Démarrer le métronome
-                playBeat();
+                // Pas de voix libre, réutiliser la plus ancienne
+                const firstKey = voices.keys().next().value;
+                if (firstKey) {
+                    const voice = voices.get(firstKey);
+                    if (voice && voice.oscillator) {
+                        voice.oscillator.stop();
+                    }
+                    voices.delete(firstKey);
+                    self.createSynthVoice(firstKey, type, frequency, velocity, voices);
+                }
             },
-            
-            stop: () => {
-                this.metronome.isPlaying = false;
-                const now = this.audioContext.currentTime;
-                this.metronome.gainNode.gain.cancelScheduledValues(now);
-                this.metronome.gainNode.gain.setValueAtTime(0, now);
-            },
-            
-            setBpm: (bpm) => {
-                this.metronome.bpm = bpm;
-            },
-            
-            setVolume: (volume) => {
-                CONFIG.project.metronomeVolume = volume;
+            stopAll: function() {
+                voices.forEach((voice, key) => {
+                    if (voice && voice.oscillator) {
+                        voice.oscillator.stop();
+                    }
+                });
+                voices.clear();
             }
         };
     }
     
-    initInstruments() {
-        // Initialiser le synthé principal
-        this.synths.piano = createPolySynth(this.audioContext, 16);
-        this.synths.piano.output.connect(this.masterGain);
+    createSynthVoice(voiceId, type, frequency, velocity, voices) {
+        if (!this.audioContext) return;
         
-        this.synths.synth = createPolySynth(this.audioContext, 8);
-        this.synths.synth.output.connect(this.masterGain);
+        const now = this.audioContext.currentTime;
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+        const filter = this.audioContext.createBiquadFilter();
         
-        this.synths.bass = createPolySynth(this.audioContext, 8);
-        this.synths.bass.output.connect(this.masterGain);
+        // Configuration selon le type
+        switch (type) {
+            case 'piano':
+                oscillator.type = 'sine';
+                filter.type = 'lowpass';
+                filter.frequency.value = 5000;
+                filter.Q.value = 1;
+                break;
+            case 'synth':
+                oscillator.type = 'sawtooth';
+                filter.type = 'lowpass';
+                filter.frequency.value = 3000;
+                filter.Q.value = 2;
+                break;
+            case 'bass':
+                oscillator.type = 'sine';
+                filter.type = 'lowpass';
+                filter.frequency.value = 1000;
+                filter.Q.value = 1;
+                break;
+            case 'strings':
+                oscillator.type = 'sine';
+                filter.type = 'lowpass';
+                filter.frequency.value = 4000;
+                filter.Q.value = 1;
+                break;
+            case 'brass':
+                oscillator.type = 'sawtooth';
+                filter.type = 'lowpass';
+                filter.frequency.value = 2000;
+                filter.Q.value = 1;
+                break;
+            default:
+                oscillator.type = 'sine';
+                filter.type = 'lowpass';
+                filter.frequency.value = 5000;
+        }
         
-        this.synths.strings = createPolySynth(this.audioContext, 16);
-        this.synths.strings.output.connect(this.masterGain);
+        oscillator.frequency.value = frequency;
         
-        // Initialiser le sampler pour la drum machine
-        this.samplers.drums = createSampler(this.audioContext);
-        this.samplers.drums.output.connect(this.masterGain);
+        // Calculer le gain basé sur la vélocité
+        const gain = window.velocityToGain(velocity);
         
-        // Charger les samples par défaut (à implémenter avec des vrais samples)
-        this.loadDefaultSamples();
+        // Enveloppe ADSR simple
+        gainNode.gain.setValueAtTime(gain, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        
+        // Connecter
+        oscillator.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(this.masterGain);
+        
+        oscillator.start(now);
+        
+        voices.set(voiceId, {
+            oscillator: oscillator,
+            gainNode: gainNode,
+            filter: filter,
+            startTime: now
+        });
+        
+        // Arrêter automatiquement après 1 seconde
+        oscillator.stop(now + 1);
+        setTimeout(() => {
+            voices.delete(voiceId);
+        }, 1000);
     }
     
-    loadDefaultSamples() {
-        // Pour l'instant, on crée des samples simples avec des oscillateurs
-        // Dans une vraie application, on chargerait des fichiers audio
+    initSamplers() {
+        // Sampler de batterie
+        this.samplers.drums = this.createDrumSampler();
+    }
+    
+    createDrumSampler() {
+        const drumSounds = {
+            kick: { frequency: 150, duration: 0.1 },
+            snare: { frequency: 200, duration: 0.1 },
+            'hihat-closed': { frequency: 800, duration: 0.05 },
+            'hihat-open': { frequency: 1000, duration: 0.1 },
+            clap: { frequency: 300, duration: 0.05 },
+            '808': { frequency: 80, duration: 0.3 },
+            cymbal: { frequency: 1200, duration: 0.2 },
+            tom: { frequency: 250, duration: 0.2 }
+        };
+        const self = this;
         
-        const sampleRate = this.audioContext.sampleRate;
-        const duration = 0.1;
-        const length = Math.floor(sampleRate * duration);
+        return {
+            play: function(soundName, velocity) {
+                const sound = drumSounds[soundName];
+                if (sound && self.audioContext) {
+                    self.playDrumSound(sound.frequency, sound.duration, velocity);
+                }
+            }
+        };
+    }
+    
+    playDrumSound(frequency, duration, velocity) {
+        if (!this.audioContext) return;
         
-        // Kick
-        const kickBuffer = this.audioContext.createBuffer(1, length, sampleRate);
-        const kickData = kickBuffer.getChannelData(0);
-        for (let i = 0; i < length; i++) {
-            const t = i / sampleRate;
-            kickData[i] = Math.sin(2 * Math.PI * 150 * t) * Math.exp(-t * 20) +
-                         Math.sin(2 * Math.PI * 50 * t) * Math.exp(-t * 15);
-        }
-        this.samplers.drums.loadSample('kick', kickBuffer);
+        const now = this.audioContext.currentTime;
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+        const filter = this.audioContext.createBiquadFilter();
         
-        // Snare
-        const snareBuffer = this.audioContext.createBuffer(1, length, sampleRate);
-        const snareData = snareBuffer.getChannelData(0);
-        for (let i = 0; i < length; i++) {
-            const t = i / sampleRate;
-            snareData[i] = (Math.sin(2 * Math.PI * 200 * t) * Math.exp(-t * 30) +
-                          0.5 * Math.random() * Math.exp(-t * 15)) * 0.5;
-        }
-        this.samplers.drums.loadSample('snare', snareBuffer);
+        oscillator.type = 'sine';
+        oscillator.frequency.value = frequency;
         
-        // Hi-Hat fermé
-        const hihatClosedBuffer = this.audioContext.createBuffer(1, length, sampleRate);
-        const hihatClosedData = hihatClosedBuffer.getChannelData(0);
-        for (let i = 0; i < length; i++) {
-            const t = i / sampleRate;
-            hihatClosedData[i] = (Math.sin(2 * Math.PI * 800 * t) * Math.exp(-t * 40) +
-                                0.5 * Math.sin(2 * Math.PI * 1600 * t) * Math.exp(-t * 40)) * 0.3;
-        }
-        this.samplers.drums.loadSample('hihat-closed', hihatClosedBuffer);
+        filter.type = 'lowpass';
+        filter.frequency.value = 5000;
         
-        // Hi-Hat ouvert
-        const hihatOpenBuffer = this.audioContext.createBuffer(1, length * 2, sampleRate);
-        const hihatOpenData = hihatOpenBuffer.getChannelData(0);
-        for (let i = 0; i < hihatOpenBuffer.length; i++) {
-            const t = i / sampleRate;
-            hihatOpenData[i] = (Math.sin(2 * Math.PI * 400 * t) * Math.exp(-t * 15) +
-                              0.3 * Math.sin(2 * Math.PI * 1200 * t) * Math.exp(-t * 20)) * 0.4;
-        }
-        this.samplers.drums.loadSample('hihat-open', hihatOpenBuffer);
+        const gain = window.velocityToGain(velocity) * 0.5;
         
-        // Clap
-        const clapBuffer = this.audioContext.createBuffer(1, length, sampleRate);
-        const clapData = clapBuffer.getChannelData(0);
-        for (let i = 0; i < length; i++) {
-            const t = i / sampleRate;
-            clapData[i] = (Math.sin(2 * Math.PI * 300 * t) * Math.exp(-t * 30) +
-                         0.3 * Math.random() * Math.exp(-t * 20)) * 0.4;
-        }
-        this.samplers.drums.loadSample('clap', clapBuffer);
+        // Enveloppe
+        gainNode.gain.setValueAtTime(gain, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
         
-        // 808 Bass
-        const bass808Buffer = this.audioContext.createBuffer(1, length * 2, sampleRate);
-        const bass808Data = bass808Buffer.getChannelData(0);
-        for (let i = 0; i < bass808Buffer.length; i++) {
-            const t = i / sampleRate;
-            bass808Data[i] = (Math.sin(2 * Math.PI * 50 * t) * Math.exp(-t * 5) +
-                            Math.sin(2 * Math.PI * 30 * t) * Math.exp(-t * 3)) * 0.6;
-        }
-        this.samplers.drums.loadSample('808', bass808Buffer);
+        oscillator.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(this.masterGain);
         
-        // Cymbal
-        const cymbalBuffer = this.audioContext.createBuffer(1, length * 3, sampleRate);
-        const cymbalData = cymbalBuffer.getChannelData(0);
-        for (let i = 0; i < cymbalBuffer.length; i++) {
-            const t = i / sampleRate;
-            cymbalData[i] = (Math.sin(2 * Math.PI * 200 * t) * Math.exp(-t * 8) +
-                           0.5 * Math.sin(2 * Math.PI * 800 * t) * Math.exp(-t * 10) +
-                           0.3 * Math.sin(2 * Math.PI * 1600 * t) * Math.exp(-t * 12)) * 0.2;
-        }
-        this.samplers.drums.loadSample('cymbal', cymbalBuffer);
-        
-        // Tom
-        const tomBuffer = this.audioContext.createBuffer(1, length * 2, sampleRate);
-        const tomData = tomBuffer.getChannelData(0);
-        for (let i = 0; i < tomBuffer.length; i++) {
-            const t = i / sampleRate;
-            tomData[i] = (Math.sin(2 * Math.PI * 100 * t) * Math.exp(-t * 10) +
-                         0.5 * Math.sin(2 * Math.PI * 200 * t) * Math.exp(-t * 8)) * 0.4;
-        }
-        this.samplers.drums.loadSample('tom', tomBuffer);
-        
-        console.log('Samples par défaut chargés');
+        oscillator.start(now);
+        oscillator.stop(now + duration);
     }
     
     async resume() {
         if (!this.audioContext) return;
         
         if (this.audioContext.state === 'suspended') {
-            try {
-                await this.audioContext.resume();
-                this.isRunning = true;
-                console.log('Contexte audio repris');
-            } catch (error) {
-                console.error('Erreur lors de la reprise du contexte audio:', error);
-                showError(ERROR_MESSAGES.audioContext.resume);
-                throw error;
-            }
+            await this.audioContext.resume();
+            this.isRunning = true;
+            console.log('Contexte audio repris');
         }
     }
     
@@ -304,190 +347,19 @@ class AudioEngine {
         }
     }
     
-    getMasterVolume() {
-        return this.masterGain ? this.masterGain.gain.value : 0;
-    }
-    
     setMasterVolume(volume) {
         if (this.masterGain) {
-            this.masterGain.gain.value = clamp(volume, 0, 1);
-            CONFIG.audio.masterVolume = volume;
+            this.masterGain.gain.value = volume;
         }
-    }
-    
-    getMasterMeterLevel() {
-        if (!this.masterMeter) return 0;
-        
-        const bufferLength = this.masterMeter.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-        this.masterMeter.getByteTimeDomainData(dataArray);
-        
-        let sum = 0;
-        for (let i = 0; i < bufferLength; i++) {
-            sum += Math.abs(dataArray[i] - 128);
-        }
-        
-        const average = sum / bufferLength;
-        return average / 128;
-    }
-    
-    getMasterMeterPeak() {
-        if (!this.masterMeter) return 0;
-        
-        const bufferLength = this.masterMeter.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-        this.masterMeter.getByteTimeDomainData(dataArray);
-        
-        let max = 0;
-        for (let i = 0; i < bufferLength; i++) {
-            const value = Math.abs(dataArray[i] - 128);
-            if (value > max) max = value;
-        }
-        
-        return max / 128;
-    }
-    
-    startMetronome(bpm) {
-        if (!this.metronome) return;
-        
-        this.metronome.bpm = bpm || this.metronome.bpm;
-        this.metronome.start();
-    }
-    
-    stopMetronome() {
-        if (this.metronome) {
-            this.metronome.stop();
-        }
-    }
-    
-    playNote(instrument, note, velocity = 127, duration = 1) {
-        if (!this.synths[instrument]) return;
-        
-        const frequency = midiToFrequency(note);
-        const synth = this.synths[instrument];
-        
-        return synth.play(frequency, velocity);
-    }
-    
-    playDrumSound(sound) {
-        if (!this.samplers.drums) return;
-        
-        return this.samplers.drums.play(sound, 1, 127);
-    }
-    
-    stopAllNotes() {
-        for (const key in this.synths) {
-            if (this.synths[key].stopAll) {
-                this.synths[key].stopAll();
-            }
-        }
-    }
-    
-    createTrackAudioNode() {
-        if (!this.audioContext) return null;
-        
-        const gain = this.audioContext.createGain();
-        gain.gain.value = 1;
-        gain.connect(this.masterGain);
-        
-        return gain;
-    }
-    
-    createEffectChain() {
-        if (!this.audioContext) return null;
-        
-        const input = this.audioContext.createGain();
-        const output = this.audioContext.createGain();
-        
-        // Chaîne d'effets par défaut
-        const eq = createEQ3(this.audioContext);
-        const compressor = createCompressor(this.audioContext);
-        const reverb = createReverb(this.audioContext);
-        const delay = createDelay(this.audioContext);
-        
-        // Connecter les effets
-        input.connect(eq.input);
-        eq.connect();
-        eq.output.connect(compressor);
-        compressor.connect(reverb.input);
-        reverb.connect();
-        reverb.output.connect(delay.input);
-        delay.connect();
-        delay.output.connect(output);
-        
-        return {
-            input,
-            output,
-            eq,
-            compressor,
-            reverb,
-            delay,
-            connect: () => {
-                // Déjà connecté
-            }
-        };
-    }
-    
-    createAudioBufferSource(buffer) {
-        if (!this.audioContext) return null;
-        
-        const source = this.audioContext.createBufferSource();
-        source.buffer = buffer;
-        
-        return source;
-    }
-    
-    decodeAudioData(audioData) {
-        if (!this.audioContext) return Promise.reject(new Error('Audio context not initialized'));
-        
-        return this.audioContext.decodeAudioData(audioData);
-    }
-    
-    createMediaStreamSource(stream) {
-        if (!this.audioContext) return null;
-        
-        return this.audioContext.createMediaStreamSource(stream);
-    }
-    
-    getCurrentTime() {
-        if (!this.audioContext) return 0;
-        return this.audioContext.currentTime - (this.latencyCompensation / 1000);
-    }
-    
-    scheduleEvent(time, callback) {
-        if (!this.audioContext) return;
-        
-        const scheduledTime = this.audioContext.currentTime + time;
-        const oscillator = this.audioContext.createOscillator();
-        oscillator.frequency.value = 0;
-        oscillator.connect(this.audioContext.destination);
-        oscillator.start(scheduledTime);
-        
-        const timer = setTimeout(() => {
-            callback();
-            oscillator.stop();
-        }, time * 1000);
-        
-        return () => clearTimeout(timer);
     }
     
     cleanup() {
-        this.stopMetronome();
-        this.stopAllNotes();
-        
         if (this.audioContext) {
-            this.audioContext.close();
-            this.audioContext = null;
+            this.audioContext.close().catch(e => {
+                console.error('Erreur lors de la fermeture du contexte audio:', e);
+            });
         }
         
-        this.masterGain = null;
-        this.masterCompressor = null;
-        this.masterMeter = null;
-        this.metronome = null;
-        this.destination = null;
-        this.synths = {};
-        this.samplers = {};
-        this.effects = {};
         this.isInitialized = false;
         this.isRunning = false;
         
@@ -505,9 +377,11 @@ function getAudioEngine() {
     return audioEngineInstance;
 }
 
-// Exporter pour les autres modules - DOIT ÊTRE FAIT IMMÉDIATEMENT
+// Exporter pour les autres modules
 window.AudioEngine = AudioEngine;
 window.getAudioEngine = getAudioEngine;
-window._audioEngineInstance = audioEngineInstance;
 
-// NE PAS auto-initialiser ici - laisser le bootstrap/main.js le faire dans le bon ordre
+// Enregistrer dans le registry CORE
+if (typeof window.CORE !== 'undefined' && typeof window.CORE.registerModule === 'function') {
+    window.CORE.registerModule('audio-engine', AudioEngine, getAudioEngine);
+}

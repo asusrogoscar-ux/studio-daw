@@ -3,10 +3,6 @@
 # Dossier de publication (racine du projet)
 publish = "."
 
-# Commande de build (aucune compilation nécessaire)
-# Le projet utilise uniquement HTML, CSS et JavaScript natif
-build = {}
-
 # Redirections
 [[redirects]]
   from = "/*"
@@ -22,10 +18,11 @@ build = {}
     X-Frame-Options = "DENY"
     X-XSS-Protection = "1; mode=block"
 
+# Configuration du build (aucune compilation nécessaire)
+[build]
+  command = "echo 'Aucune compilation nécessaire - projet statique'"
+  publish = "."
+
 # Variables d'environnement
 [build.environment]
   NODE_VERSION = "18"
-
-# Configuration du déploiement
-[build]
-  command = "echo 'Aucune compilation nécessaire - projet statique'"

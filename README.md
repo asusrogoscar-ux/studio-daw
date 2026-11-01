@@ -69,14 +69,28 @@
 - **Ctrl+S** : Sauvegarder
 - **Flèches** : Navigation
 
-## 🚀 Installation et exécution
+## \ud83d\ude80 Installation et ex\u00e9cution
 
-### Méthode 1 : Ouverture directe
-1. Téléchargez ou clonez ce dépôt
+### M\u00e9thode 1 : Ouverture directe
+1. T\u00e9l\u00e9chargez ou clonez ce d\u00e9p\u00f4t
 2. Ouvrez le fichier `index.html` dans un navigateur moderne (Chrome, Firefox, Edge)
 3. L'application se lancera automatiquement
 
-### Méthode 2 : Serveur local
+### M\u00e9thode 2 : Serveur local Windows
+**Utilisez le fichier `start-local.bat` fourni :**
+1. Double-cliquez sur `start-local.bat` dans l'explorateur de fichiers
+2. Un serveur HTTP se lancera automatiquement sur le port 8000
+3. Ouvrez votre navigateur et acc\u00e9dez \u00e0 : `http://localhost:8000`
+
+**Pour arr\u00eater le serveur :**
+- Fermez la fen\u00eatre du terminal (cliquez sur la croix ou appuyez sur Ctrl+C)
+
+**Si Python n'est pas install\u00e9 :**
+1. T\u00e9l\u00e9chargez Python depuis [python.org](https://www.python.org/downloads/)
+2. Pendant l'installation, cochez **"Add Python to PATH"**
+3. R\u00e9essayez de lancer `start-local.bat`
+
+**Alternatives :**
 ```bash
 # Avec Python
 python -m http.server 8000
@@ -88,167 +102,20 @@ npx serve
 php -S localhost:8000
 ```
 
-Puis ouvrez `http://localhost:8000` dans votre navigateur.
+### M\u00e9thode 3 : D\u00e9ploiement Netlify
+1. **Connectez votre d\u00e9p\u00f4t GitHub** \u00e0 Netlify
+2. **Importez le projet** depuis `asusrogoscar-ux/studio-daw`
+3. **Configuration automatique** : Netlify d\u00e9tectera le fichier `netlify.toml`
+4. **D\u00e9ployez** : Votre application sera disponible sur une URL Netlify
 
-### ⚠️ Important
-- **HTTPS requis** pour certaines fonctionnalités (MIDI, microphone) en production
-- **localhost** fonctionne pour le développement
-- Utilisez **Chrome, Firefox ou Edge** pour une compatibilité optimale
+**Configuration Netlify :**
+- Dossier de publication : `./` (racine du projet)
+- Commande de build : Aucune (projet statique)
+- Fichier de configuration : `netlify.toml` (d\u00e9j\u00e0 pr\u00e9sent)
 
-## 📁 Structure du projet
+### \u26a0\ufe0f Important
+- **HTTPS requis** pour certaines fonctionnalit\u00e9s (MIDI, microphone) en production
+- **localhost** fonctionne pour le d\u00e9veloppement
+- Utilisez **Chrome, Firefox ou Edge** pour une compatibilit\u00e9 optimale
+- Netlify utilise HTTPS par d\u00e9faut, donc toutes les fonctionnalit\u00e9s seront disponibles
 
-```
-studio-music/
-├── index.html              # Page principale
-├── README.md               # Documentation
-├── styles/
-│   └── main.css           # Styles CSS principaux
-├── scripts/
-│   ├── config.js          # Configuration et constants
-│   ├── utils.js           # Fonctions utilitaires
-│   ├── audio-engine.js    # Moteur audio (Web Audio API)
-│   ├── midi-manager.js    # Gestion MIDI
-│   ├── track.js           # Classes Track et Clip
-│   ├── timeline.js        # Timeline multipiste
-│   ├── recorder.js        # Enregistrement audio/MIDI
-│   ├── drum-machine.js    # Drum Machine et séquences
-│   ├── piano-roll.js      # Piano Roll
-│   ├── virtual-keyboard.js # Clavier virtuel
-│   ├── mixer.js           # Mixeur audio
-│   ├── effects.js         # Effets audio
-│   ├── samples-library.js # Bibliothèque de samples
-│   ├── instruments.js     # Instruments virtuels
-│   ├── storage.js         # Sauvegarde IndexedDB
-│   ├── ui.js              # Gestion de l'interface
-│   ├── keyboard-shortcuts.js # Raccourcis clavier
-│   └── main.js            # Point d'entrée principal
-└── samples/               # (Optionnel) Samples audio
-```
-
-## 🔧 Technologies utilisées
-
-- **HTML5** : Structure de l'application
-- **CSS3** : Styles et animations
-- **JavaScript (ES6+)** : Logique de l'application
-- **Web Audio API** : Traitement audio en temps réel
-- **Web MIDI API** : Connexion aux appareils MIDI
-- **MediaRecorder API** : Enregistrement audio
-- **IndexedDB** : Sauvegarde locale des projets
-- **AudioWorklet** : (Optionnel) Traitement audio avancé
-
-## 🎯 Utilisation
-
-### 1. Création d'un nouveau projet
-- Cliquez sur **📁** (Nouveau projet)
-- Ou appuyez sur **Ctrl+N**
-
-### 2. Ajout de pistes
-- Cliquez sur **+** ou utilisez le menu
-- Choisissez le type de piste (Audio, MIDI, Batterie, Instrument)
-
-### 3. Enregistrement
-- **Armez** une piste avec le bouton **🎤**
-- Cliquez sur **⭕** (Enregistrement) ou appuyez sur **R**
-- Jouez votre instrument ou chantez dans le microphone
-
-### 4. Beatmaking
-- Allez dans l'onglet **Drum Machine**
-- Cliquez sur les cases de la grille pour ajouter des sons
-- Sélectionnez un pattern et appuyez sur **Lecture**
-
-### 5. Piano Roll
-- Allez dans l'onglet **Piano Roll**
-- Cliquez sur les notes du clavier pour les ajouter
-- Utilisez le clavier de l'ordinateur (A-W-S-E-D-...) pour jouer
-
-### 6. Mixage
-- Ouvrez le **Mixeur** en bas de l'écran
-- Réglez le volume, le panoramique et les effets
-- Utilisez **Mute** et **Solo** pour isoler des pistes
-
-### 7. Export
-- Cliquez sur **📤** (Exporter)
-- Choisissez le format (WAV, MP3, MIDI)
-- Le fichier sera téléchargé automatiquement
-
-## 🎨 Personnalisation
-
-### Thème
-- **Mode sombre** par défaut
-- Couleurs personnalisables dans `config.js`
-
-### Paramètres audio
-- **BPM** : 40-200
-- **Taille du buffer** : 256, 512, 1024, 2048
-- **Fréquence d'échantillonnage** : 44100, 48000, 96000 Hz
-
-### Paramètres MIDI
-- **Canal MIDI** : 1-16 ou Tous
-- **Courbe de vélocité** : Linéaire, Logarithmique, Exponentielle
-- **MIDI Thru** : Activation/désactivation
-
-## 🐛 Dépannage
-
-### Problèmes courants
-
-1. **Le son ne fonctionne pas**
-   - Vérifiez que votre navigateur supporte la Web Audio API
-   - Cliquez sur la page pour activer le contexte audio
-   - Assurez-vous que le volume n'est pas muet
-
-2. **Le MIDI ne se connecte pas**
-   - Utilisez Chrome, Firefox ou Edge
-   - Vérifiez que votre appareil MIDI est connecté
-   - Rafraîchissez la page après avoir connecté l'appareil
-   - Assurez-vous d'utiliser HTTPS ou localhost
-
-3. **Le microphone ne fonctionne pas**
-   - Autorisez l'accès au microphone dans votre navigateur
-   - Vérifiez que le microphone est connecté
-   - Utilisez HTTPS ou localhost
-
-4. **Les projets ne se sauvegardent pas**
-   - Vérifiez que votre navigateur supporte IndexedDB
-   - Assurez-vous qu'il y a assez d'espace de stockage
-   - Essayez un autre navigateur
-
-## 📊 Performances
-
-- **Latence** : < 10ms avec buffer 256
-- **Voix polyphoniques** : Jusqu'à 16 par instrument
-- **Pistes** : Illimitées (selon les ressources du navigateur)
-- **Clips** : Illimités (selon les ressources du navigateur)
-
-## 🔒 Sécurité et confidentialité
-
-- **Aucune donnée** n'est envoyée à des serveurs externes
-- **Tout est local** : les projets sont stockés dans votre navigateur
-- **Pas de tracking** : aucune collecte de données
-- **Open source** : le code est transparent et vérifiable
-
-## 🤝 Contribution
-
-Les contributions sont les bienvenues ! Voici comment contribuer :
-
-1. **Fork** le projet
-2. **Créez** une branche (`git checkout -b feature/amazing-feature`)
-3. **Commitez** vos changements (`git commit -m 'Add amazing feature'`)
-4. **Poussez** sur la branche (`git push origin feature/amazing-feature`)
-5. **Ouvrez** une Pull Request
-
-## 📄 Licence
-
-Ce projet est sous licence **MIT** - libre d'utilisation pour tout usage personnel ou commercial.
-
-## 🙏 Remerciements
-
-- **Web Audio API** - MDN Documentation
-- **Web MIDI API** - Chrome Developers
-- **Tone.js** - Inspiration pour la gestion audio
-- **Soundtrap, FL Studio, BandLab** - Inspiration pour l'interface et les fonctionnalités
-
----
-
-**Créé avec ❤️ pour les musiciens et les développeurs**
-
-*Studio DAW - Votre studio de musique dans le navigateur*

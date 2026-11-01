@@ -586,3 +586,4 @@ function getDrumMachine() {
 window.DrumMachine = DrumMachine;
 window.DrumPattern = DrumPattern;
 window.getDrumMachine = getDrumMachine;
+window._drumMachineInstance = drumMachineInstance;

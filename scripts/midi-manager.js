@@ -668,12 +668,4 @@ function getMidiManager() {
 // Exporter pour les autres modules - DOIT ÊTRE FAIT IMMÉDIATEMENT
 window.MidiManager = MidiManager;
 window.getMidiManager = getMidiManager;
-
-// NE PAS auto-initialiser ici - laisser main.js le faire dans le bon ordre
-// if (document.readyState === 'loading') {
-//     document.addEventListener('DOMContentLoaded', () => {
-//         getMidiManager();
-//     });
-// } else {
-//     getMidiManager();
-// }
+window._midiManagerInstance = midiManagerInstance;

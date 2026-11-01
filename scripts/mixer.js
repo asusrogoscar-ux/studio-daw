@@ -852,3 +852,4 @@ function getMixer() {
 window.Mixer = Mixer;
 window.MixerChannel = MixerChannel;
 window.getMixer = getMixer;
+window._mixerInstance = mixerInstance;

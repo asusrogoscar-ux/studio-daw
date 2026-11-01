@@ -797,3 +797,4 @@ function getPianoRoll() {
 // Exporter pour les autres modules
 window.PianoRoll = PianoRoll;
 window.getPianoRoll = getPianoRoll;
+window._pianoRollInstance = pianoRollInstance;

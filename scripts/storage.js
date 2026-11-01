@@ -441,3 +441,4 @@ function getStorageManager() {
 // Exporter pour les autres modules
 window.StorageManager = StorageManager;
 window.getStorageManager = getStorageManager;
+window._storageManagerInstance = storageManagerInstance;

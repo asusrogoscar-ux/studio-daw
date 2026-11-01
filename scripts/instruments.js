@@ -363,3 +363,4 @@ function getInstrumentsManager() {
 window.InstrumentsManager = InstrumentsManager;
 window.CustomInstrument = CustomInstrument;
 window.getInstrumentsManager = getInstrumentsManager;
+window._instrumentsManagerInstance = instrumentsManagerInstance;

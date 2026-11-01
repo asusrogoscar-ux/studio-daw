@@ -1345,3 +1345,4 @@ function getTimeline() {
 // Exporter pour les autres modules
 window.Timeline = Timeline;
 window.getTimeline = getTimeline;
+window._timelineInstance = timelineInstance;

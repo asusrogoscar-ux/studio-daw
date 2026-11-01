@@ -942,3 +942,4 @@ function getEffectsManager() {
 // Exporter pour les autres modules
 window.EffectsManager = EffectsManager;
 window.getEffectsManager = getEffectsManager;
+window._effectsManagerInstance = effectsManagerInstance;

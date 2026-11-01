@@ -484,3 +484,4 @@ function getSamplesLibrary() {
 // Exporter pour les autres modules
 window.SamplesLibrary = SamplesLibrary;
 window.getSamplesLibrary = getSamplesLibrary;
+window._samplesLibraryInstance = samplesLibraryInstance;

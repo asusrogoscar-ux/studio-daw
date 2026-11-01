@@ -508,12 +508,6 @@ function getAudioEngine() {
 // Exporter pour les autres modules - DOIT ÊTRE FAIT IMMÉDIATEMENT
 window.AudioEngine = AudioEngine;
 window.getAudioEngine = getAudioEngine;
+window._audioEngineInstance = audioEngineInstance;
 
-// NE PAS auto-initialiser ici - laisser main.js le faire dans le bon ordre
-// if (document.readyState === 'loading') {
-//     document.addEventListener('DOMContentLoaded', () => {
-//         getAudioEngine();
-//     });
-// } else {
-//     getAudioEngine();
-// }
+// NE PAS auto-initialiser ici - laisser le bootstrap/main.js le faire dans le bon ordre

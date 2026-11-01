@@ -326,3 +326,4 @@ function getKeyboardShortcuts() {
 // Exporter pour les autres modules
 window.KeyboardShortcuts = KeyboardShortcuts;
 window.getKeyboardShortcuts = getKeyboardShortcuts;
+window._keyboardShortcutsInstance = keyboardShortcutsInstance;

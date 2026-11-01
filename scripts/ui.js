@@ -810,3 +810,4 @@ function getUIManager() {
 // Exporter pour les autres modules
 window.UIManager = UIManager;
 window.getUIManager = getUIManager;
+window._uiManagerInstance = uiManagerInstance;

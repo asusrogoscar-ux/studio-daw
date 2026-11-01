@@ -565,3 +565,4 @@ function getVirtualKeyboard() {
 // Exporter pour les autres modules
 window.VirtualKeyboard = VirtualKeyboard;
 window.getVirtualKeyboard = getVirtualKeyboard;
+window._virtualKeyboardInstance = virtualKeyboardInstance;

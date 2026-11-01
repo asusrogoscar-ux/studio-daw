@@ -396,3 +396,4 @@ function getRecorder() {
 // Exporter pour les autres modules
 window.Recorder = Recorder;
 window.getRecorder = getRecorder;
+window._recorderInstance = recorderInstance;
